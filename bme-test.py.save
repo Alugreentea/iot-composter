@@ -1,0 +1,4 @@
+pi@raspberrypi:~/Aws $ python bme-sample.py
+  File "/home/pi/Aws/bme-sample.py", line 109
+    var_h = (adc_H - (digH[3] * 64.0 + digH[4]/16384.0 * var_h)) * (digH[1] / 65536.0 * (1.0 + digH[5] / 67108864.0 * var_h * (1.0 + digH[2] / 67108864.0 * var_h)))
+TabError: inconsistent use of tabs and spaces in indentation
