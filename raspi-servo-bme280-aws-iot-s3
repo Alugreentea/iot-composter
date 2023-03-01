@@ -1,0 +1,71 @@
+import time
+import json
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+from Adafruit_BME280 import BME280
+import RPi.GPIO as GPIO
+
+# AWS IoT Coreの認証情報
+endpoint = "xxxxxxxxxxxxxx-ats.iot.ap-northeast-1.amazonaws.com"
+cert_path = "/path/to/certificate.pem.crt"
+key_path = "/path/to/private.pem.key"
+root_ca_path = "/path/to/root-ca.pem"
+
+# AWS S3バケットの情報
+bucket_name = "my-bucket"
+object_key_prefix = "raspi-data"
+
+# センサーの初期化
+bme280 = BME280()
+
+# SG90の初期化
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(14, GPIO.OUT)
+servo = GPIO.PWM(14, 50)
+servo.start(0)
+
+# AWS IoT Coreクライアントの作成
+mqtt_client = AWSIoTMQTTClient("raspi")
+mqtt_client.configureEndpoint(endpoint, 8883)
+mqtt_client.configureCredentials(root_ca_path, key_path, cert_path)
+
+# AWS IoT Coreクライアントを接続する
+mqtt_client.connect()
+
+# AWS IoT Coreルールをトリガーするために、AWS IoT Coreクライアントにルールトリガー用のトピックをサブスクライブする
+mqtt_client.subscribe("$aws/rules/raspi-to-s3", 1, lambda client, userdata, message: None)
+
+while True:
+    try:
+        # 温度、湿度、気圧の計測
+        temperature = round(bme280.read_temperature(), 1)
+        humidity = round(bme280.read_humidity(), 1)
+        pressure = round(bme280.read_pressure() / 100.0, 1)
+
+        # データをJSON形式に変換
+        data = {"timestamp": int(time.time()), "temperature": temperature, "humidity": humidity, "pressure": pressure}
+        json_data = json.dumps(data)
+
+        # AWS IoT Coreにデータを送信する
+        mqtt_client.publish("raspi-data", json_data, 1)
+
+        # SG90を動作させる
+        for angle in range(0, 181, 10):
+            duty = 2.5 + (12.0 - 2.5) * (angle / 180.0)
+            servo.ChangeDutyCycle(duty)
+            time.sleep(0.3)
+
+        for angle in range(180, -1, -10):
+            duty = 2.5 + (12.0 - 2.5) * (angle / 180.0)
+            servo.ChangeDutyCycle(duty)
+            time.sleep(0.3)
+
+    except KeyboardInterrupt:
+        # プログラムの終了
+        break
+
+# SG90を停止させる
+servo.stop()
+
+# GPIOの解放
+GPIO.cleanup()
+
